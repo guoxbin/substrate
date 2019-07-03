@@ -311,6 +311,7 @@ impl<TMessage, TSubstream> NetworkBehaviourEventProcess<MdnsEvent> for Behaviour
 		match event {
 			MdnsEvent::Discovered(list) => {
 				for (peer_id, _) in list {
+					trace!(target: "sub-libp2p", "Discovered {:?}", peer_id);
 					self.custom_protocols.add_discovered_node(&peer_id);
 				}
 			},

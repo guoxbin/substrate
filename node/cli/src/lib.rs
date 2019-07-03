@@ -72,13 +72,64 @@ fn load_spec(id: &str) -> Result<Option<chain_spec::ChainSpec>, String> {
 	})
 }
 
+pub use structopt::clap::App;
+pub use cli::{GetLogFilter, AugmentClap, CoreParams};
+use structopt::{StructOpt, clap::{AppSettings, SubCommand}};
+#[derive(Clone, Debug)]
+pub enum CustomCommand {
+	MyCommand(MyCommandCmd),
+	YourCommand(YourCommandCmd),
+	None,
+}
+
+impl StructOpt for CustomCommand {
+	fn clap<'a, 'b>() -> App<'a, 'b> {
+		App::new("MyCommand")
+			.subcommand(
+			MyCommandCmd::augment_clap(SubCommand::with_name("my-command"))
+				.about("my command"))
+			.subcommand(
+				YourCommandCmd::augment_clap(SubCommand::with_name("your-command"))
+					.about("your command"))
+	}
+
+	fn from_clap(matches: &::structopt::clap::ArgMatches) -> Self {
+		match matches.subcommand() {
+			("my-command", Some(matches)) =>
+				CustomCommand::MyCommand(MyCommandCmd::from_clap(matches)),
+			("your-command", Some(matches)) =>
+				CustomCommand::YourCommand(YourCommandCmd::from_clap(matches)),
+			(_, Some(_)) => CustomCommand::None,
+			(_, None) => CustomCommand::None,
+		}
+	}
+}
+
+impl GetLogFilter for CustomCommand {
+	fn get_log_filter(&self) -> Option<String> {
+		None
+	}
+}
+
+#[derive(Debug, StructOpt, Clone)]
+pub struct MyCommandCmd {
+	#[structopt(long = "my-test")]
+	pub my_test: Option<String>,
+}
+
+#[derive(Debug, StructOpt, Clone)]
+pub struct YourCommandCmd {
+	#[structopt(long = "your-test")]
+	pub your_test: Option<String>,
+}
+
 /// Parse command line arguments into service configuration.
 pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Result<()> where
 	I: IntoIterator<Item = T>,
 	T: Into<std::ffi::OsString> + Clone,
 	E: IntoExit,
 {
-	cli::parse_and_execute::<service::Factory, NoCustom, NoCustom, _, _, _, _, _>(
+	cli::parse_and_execute::<service::Factory, CustomCommand, NoCustom, _, _, _, _, _>(
 		load_spec, &version, "substrate-node", args, exit,
 		|exit, _custom_args, config| {
 			info!("{}", version.name);
@@ -103,6 +154,15 @@ pub fn run<I, T, E>(args: I, exit: E, version: cli::VersionInfo) -> error::Resul
 				),
 			}.map_err(|e| format!("{:?}", e))
 		}
+	).map(|x| {
+		if let Some(x) = x {
+			match x{
+				CustomCommand::MyCommand(my_command_cmd) => println!("my command executed: {}", my_command_cmd.my_test.unwrap_or("".to_string())),
+				CustomCommand::YourCommand(your_command_cmd) => println!("your command executed: {}", your_command_cmd.your_test.unwrap_or("".to_string())),
+				CustomCommand::None => {},
+			}
+		}
+	}
 	).map_err(Into::into).map(|_| ())
 }
 
